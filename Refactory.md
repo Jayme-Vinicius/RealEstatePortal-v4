@@ -4,7 +4,7 @@
 
 Este documento explica a implementação do padrão de projeto Factory Method no sistema de gerenciamento imobiliário. O Factory Method é um padrão criacional que fornece uma interface para criar objetos em uma superclasse, mas permite que as subclasses alterem o tipo de objetos que serão criados.
 
-## Por que escolhemos o Factory Method?
+## Por que a escolha do Factory Method?
 
 ### Problema inicial
 
