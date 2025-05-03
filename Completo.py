@@ -1,5 +1,123 @@
 #user.py
 from abc import ABC, abstractmethod
+
+class RealEstateFacade:
+
+    def __init__(self): # Implementação do padrão de projeto Facade
+        # Inicializa os controladores como atributos do Facade
+        self.user_controller = UserController()
+        self.property_controller = PropertyController()
+        self.mortgage_controller = MortgageController()
+        self.visit_controller = VisitController(self.property_controller, self.user_controller)
+        self.market_analysis_controller = MarketAnalysisController(self.property_controller)
+        self.review_controller = ReviewController()
+        self.logged_user = None
+
+    # Métodos para gerenciamento de usuários
+    def register_user(self, name, email, password, user_type): #Registra um novo usuário no sistema
+        
+        return self.user_controller.register_user(name, email, password, user_type)
+
+    def login(self): #Realiza login do usuário
+        
+        self.logged_user = self.user_controller.login()
+        return self.logged_user
+
+    def logout(self): #Realiza logout do usuário
+        
+        user_name = self.logged_user.name if self.logged_user else None
+        self.logged_user = None
+        return user_name
+
+    def get_logged_user(self): #Retorna o usuário logado atualmente
+        
+        return self.logged_user
+
+    
+    def create_property(self, property_type, title, description, price, location, transaction_type): #Métodos para gerenciamento de propriedades
+        
+        if not self.logged_user or self.logged_user.get_role() != "Agente": #Cria uma nova propriedade
+            return False, "Apenas agentes podem cadastrar propriedades"
+        
+        try:
+            new_property = self.property_controller.create_property(
+                property_type=property_type,
+                title=title,
+                description=description,
+                price=price,
+                location=location,
+                transaction_type=transaction_type,
+                agent=self.logged_user
+            )
+            return True, new_property
+        except ValueError as e:
+            return False, str(e)
+
+    def search_properties(self, search_type, search_value=None, min_price=None, max_price=None): #Método para procurar por propriedade
+        
+        if search_type == "all": #Pesquisa propriedades com diferentes critérios
+            return self.property_controller.search_all_properties()
+        elif search_type == "location":
+            return self.property_controller.search_property_by_location(search_value)
+        elif search_type == "type":
+            return self.property_controller.search_property_by_type(search_value)
+        elif search_type == "price_range":
+            return self.property_controller.search_property_by_price_range(min_price, max_price)
+        return []
+
+    
+    def calculate_mortgage(self, price, interest_rate, years):# Métodos para cálculo de financiamento
+        return self.mortgage_controller.calculate_mortgage(price, interest_rate, years)
+
+    
+    def schedule_visit(self, property_id, date_time):# Métodos para agendamento de visitas
+        if not self.logged_user:
+            return False, "Nenhum usuário logado"
+        
+        try:
+            visit_id = len(db.get_visits()) + 1
+            new_visit = self.visit_controller.schedule_visit(
+                id=visit_id,
+                client_id=self.logged_user.id,
+                property_id=property_id,
+                date_time=date_time
+            )
+            return True, new_visit
+        except ValueError as e:
+            return False, str(e)
+
+    def list_visits(self):
+        return self.visit_controller.list_visits()
+
+    def cancel_visit(self, visit_id):
+        return self.visit_controller.cancel_visit(visit_id)
+
+    def reschedule_visit(self, visit_id, new_date_time):
+        return self.visit_controller.reschedule_visit(visit_id, new_date_time)
+
+    
+    def add_review(self, property_id, rating, comment):# Métodos para avaliações
+        if not self.logged_user:
+            return False, 
+        
+        try:
+            new_review = self.review_controller.add_review(
+                reviewer_id=self.logged_user.id,
+                property_id=property_id,
+                rating=rating,
+                comment=comment
+            )
+            return True, new_review
+        except ValueError as e:
+            return False, str(e)
+
+    def list_reviews(self):
+        return self.review_controller.list_all_reviews()
+
+    
+    def get_market_analysis(self, location):# Métodos para análise de mercado
+        return self.market_analysis_controller.get_market_analysis(location)
+
 class User(ABC):
     def __init__(self, user_id, name, email, password):
         self._id = user_id
@@ -898,8 +1016,256 @@ class VisitController:
             return True
         return False
 
+# Implementação do Padrão Observer para o sistema imobiliário
+from abc import ABC, abstractmethod
+
+# Interface Observer (Observador)
+class PropertyObserver(ABC):
+    @abstractmethod
+    def update(self, property):
+        """
+        Método a ser chamado quando uma propriedade é atualizada
+        """
+        pass
+
+# Interface Observable (Observado/Subject)
+class PropertyObservable(ABC):
+    @abstractmethod
+    def add_observer(self, observer):
+        """
+        Adiciona um observador à lista de observadores
+        """
+        pass
+    
+    @abstractmethod
+    def remove_observer(self, observer):
+        """
+        Remove um observador da lista de observadores
+        """
+        pass
+    
+    @abstractmethod
+    def notify_observers(self):
+        """
+        Notifica todos os observadores sobre uma mudança
+        """
+        pass
+
+# Implementação concreta do Observer para Clientes interessados em propriedades
+class ClientObserver(PropertyObserver):
+    def __init__(self, client, criteria=None):
+        self.client = client
+        self.criteria = criteria or {}  # Critérios de interesse (localização, preço, etc.)
+        self.notifications = []  # Lista de notificações recebidas
+    
+    def update(self, property):
+        # Verifica se a propriedade atende aos critérios do cliente
+        if self._matches_criteria(property):
+            message = f"Notificação para {self.client.name}: Nova propriedade '{property.title}' disponível em {property.location} por R${property.price}."
+            self.notifications.append(message)
+            print(message)  # Imprime a notificação (pode ser substituído por email, etc.)
+    
+    def _matches_criteria(self, property):
+        # Se não há critérios, aceita qualquer propriedade
+        if not self.criteria:
+            return True
+        
+        # Verifica cada critério
+        for key, value in self.criteria.items():
+            if key == 'min_price' and property.price < value:
+                return False
+            elif key == 'max_price' and property.price > value:
+                return False
+            elif key == 'location' and value.lower() not in property.location.lower():
+                return False
+            elif key == 'property_category' and value != property.property_category:
+                return False
+            elif key == 'transaction_type' and value != property.transaction_type:
+                return False
+        
+        return True  # Todos os critérios foram satisfeitos
+
+# Modificação da classe Property para implementar Observable
+class PropertyWithObserver(Property, PropertyObservable):
+    def __init__(self, id, title, description, price, location, property_category, transaction_type, agent, virtual_tour_url=None):
+        # Chama o construtor da classe Property
+        Property.__init__(self, id, title, description, price, location, property_category, transaction_type, agent, virtual_tour_url)
+        # Inicializa a lista de observadores
+        self._observers = []
+    
+    def add_observer(self, observer):
+        if observer not in self._observers:
+            self._observers.append(observer)
+    
+    def remove_observer(self, observer):
+        if observer in self._observers:
+            self._observers.remove(observer)
+    
+    def notify_observers(self):
+        for observer in self._observers:
+            observer.update(self)
+    
+    # Sobrescreve os setters originais para notificar os observadores quando algo mudar
+    @Property.price.setter
+    def price(self, value):
+        Property.price.fset(self, value)  # Chama o setter original
+        self.notify_observers()  # Notifica os observadores
+    
+    @Property.available.setter
+    def available(self, value):
+        Property.available.fset(self, value)  # Chama o setter original
+        self.notify_observers()  # Notifica os observadores
+    
+    # Sobrescreve outros métodos que alteram o estado
+    def update_details(self, **kwargs):
+        super().update_details(**kwargs)
+        self.notify_observers()
+    
+    def switch_status(self):
+        super().switch_status()
+        self.notify_observers()
+
+# Modificação do PropertyFactory para criar PropertyWithObserver
+class PropertyFactoryWithObserver:
+    @staticmethod
+    def get_property_creator(property_type):
+        # Mantém o mesmo comportamento que o PropertyFactory original
+        return PropertyFactory.get_property_creator(property_type)
+    
+    @staticmethod
+    def create_property(property_type, property_id, title, description, price, location, transaction_type, agent, virtual_tour_url=None):
+        # Cria uma propriedade com o factory original
+        property = PropertyFactory.create_property(
+            property_type, property_id, title, description, 
+            price, location, transaction_type, agent, virtual_tour_url
+        )
+        
+        # Converte para PropertyWithObserver
+        observer_property = PropertyWithObserver(
+            property.id, property.title, property.description, 
+            property.price, property.location, property.property_category, 
+            property.transaction_type, property.agent, property.virtual_tour_url
+        )
+        
+        return observer_property
+
+# Extensão do PropertyController para usar o padrão Observer
+class PropertyControllerWithObserver(PropertyController):
+    def __init__(self):
+        super().__init__()
+        self._property_interests = {}  # Mapeamento de critérios de interesse por cliente
+    
+    def register_client_interest(self, client, criteria=None):
+        """
+        Registra o interesse de um cliente por propriedades com determinados critérios
+        """
+        observer = ClientObserver(client, criteria)
+        self._property_interests[client.id] = observer
+        
+        # Notifica o cliente sobre propriedades existentes que correspondem aos critérios
+        for prop in self._properties:
+            if isinstance(prop, PropertyWithObserver):
+                prop.add_observer(observer)
+                if observer._matches_criteria(prop):
+                    observer.update(prop)
+            else:
+                # Caso a propriedade não seja do tipo PropertyWithObserver
+                if observer._matches_criteria(prop):
+                    message = f"Propriedade existente que pode te interessar: '{prop.title}' em {prop.location} por R${prop.price}."
+                    observer.notifications.append(message)
+                    print(f"Notificação para {client.name}: {message}")
+        
+        return observer
+    
+    def unregister_client_interest(self, client_id):
+        """
+        Remove o registro de interesse de um cliente
+        """
+        if client_id in self._property_interests:
+            observer = self._property_interests.pop(client_id)
+            # Remove o observador de todas as propriedades
+            for prop in self._properties:
+                if isinstance(prop, PropertyWithObserver):
+                    prop.remove_observer(observer)
+            return True
+        return False
+    
+    def create_property(self, property_type, title, description, price, location, transaction_type, agent, virtual_tour_url=None):
+        # Cria a propriedade com o observer
+        property = PropertyFactoryWithObserver.create_property(
+            property_type=property_type,
+            property_id=None,  # O ID será atribuído pelo banco de dados
+            title=title,
+            description=description,
+            price=price,
+            location=location,
+            transaction_type=transaction_type,
+            agent=agent,
+            virtual_tour_url=virtual_tour_url
+        )
+        
+        # Adiciona a propriedade ao sistema
+        added_property = self.add_property(property)
+        
+        # Adiciona todos os observadores interessados
+        for observer in self._property_interests.values():
+            if isinstance(added_property, PropertyWithObserver):
+                added_property.add_observer(observer)
+                # A notificação acontecerá automaticamente na próxima alteração
+                # Para notificar imediatamente:
+                if observer._matches_criteria(added_property):
+                    observer.update(added_property)
+        
+        return added_property
+
+# Extensão da fachada para incluir funcionalidades do Observer
+class RealEstateFacadeWithObserver(RealEstateFacade):
+    def __init__(self):
+        # Inicializa a fachada original
+        super().__init__()
+        # Substitui o controlador de propriedades pelo que suporta Observer
+        self.property_controller = PropertyControllerWithObserver()
+        # Atualiza dependências
+        self.visit_controller = VisitController(self.property_controller, self.user_controller)
+        self.market_analysis_controller = MarketAnalysisController(self.property_controller)
+    
+    def register_property_interest(self, criteria=None):
+        # Registra o interesse do usuário logado em propriedades que atendem a certos critérios
+        if not self.logged_user:
+            return False, "Nenhum usuário logado"
+        
+        try:
+            observer = self.property_controller.register_client_interest(self.logged_user, criteria)
+            return True, f"Interesse registrado. Você será notificado sobre novas propriedades."
+        except Exception as e:
+            return False, str(e)
+    
+    def unregister_property_interest(self):
+        # Remove o registro de interesse do usuário logado
+
+        if not self.logged_user:
+            return False, "Nenhum usuário logado"
+        
+        if self.property_controller.unregister_client_interest(self.logged_user.id):
+            return True, "Notificações desativadas com sucesso."
+        else:
+            return False, "Você não possui notificações ativas."
+    
+    def get_notifications(self):
+        # Obtém as notificações do usuário logado
+
+        if not self.logged_user:
+            return False, "Nenhum usuário logado"
+        
+        observer = self.property_controller._property_interests.get(self.logged_user.id)
+        if observer:
+            return True, observer.notifications
+        else:
+            return False, "Você não possui notificações ativas."
+
 #main.py
-def agendamento_menu(logged_user, visit_controller):
+# Menu Principal atualizado para usar o padrão Facade
+def agendamento_menu(facade):
     while True:
         print("\n===== Agendamento de Compromissos =====")
         print("1. Agendar visita")
@@ -911,27 +1277,22 @@ def agendamento_menu(logged_user, visit_controller):
 
         if option == "1":
             print("\n===== Agendar Visita =====")
-            if logged_user is None:
+            if not facade.get_logged_user():
                 print("Erro: Nenhum usuário logado.")
             else:
                 property_id = int(input("Digite o ID da propriedade para agendar visita: "))
                 date_time = input("Digite a data e hora para a visita (ex: 2025-03-14 10:00): ")
 
-                # Agendar visita
-                try:
-                    new_visit = visit_controller.schedule_visit(
-                        id=len(db.get_visits()) + 1,
-                        client_id=logged_user.id,
-                        property_id=property_id,
-                        date_time=date_time
-                    )
-                    print(f"Visita agendada com sucesso!\n{new_visit}")
-                except ValueError as e:
-                    print(f"Erro ao agendar a visita: {e}")
+                # Agendar visita usando o facade
+                success, result = facade.schedule_visit(property_id, date_time)
+                if success:
+                    print(f"Visita agendada com sucesso!\n{result}")
+                else:
+                    print(f"Erro ao agendar a visita: {result}")
 
         elif option == "2":
             print("\n===== Visitas Marcadas =====")
-            visits = visit_controller.list_visits()
+            visits = facade.list_visits()
             if visits:
                 for visit in visits:
                     print(visit)
@@ -940,7 +1301,7 @@ def agendamento_menu(logged_user, visit_controller):
 
         elif option == "3":
             visit_id = int(input("Digite o ID da visita que deseja cancelar: "))
-            if visit_controller.cancel_visit(visit_id):
+            if facade.cancel_visit(visit_id):
                 print("Visita cancelada com sucesso.")
             else:
                 print("Visita não encontrada.")
@@ -948,7 +1309,7 @@ def agendamento_menu(logged_user, visit_controller):
         elif option == "4":
             visit_id = int(input("Digite o ID da visita que deseja reagendar: "))
             new_date_time = input("Digite a nova data e hora (ex: 2025-03-15 14:00): ")
-            if visit_controller.reschedule_visit(visit_id, new_date_time):
+            if facade.reschedule_visit(visit_id, new_date_time):
                 print("Visita reagendada com sucesso.")
             else:
                 print("Visita não encontrada.")
@@ -959,14 +1320,83 @@ def agendamento_menu(logged_user, visit_controller):
         else:
             print("Opção inválida. Tente novamente.")
 
+# Integração do padrão Observer no menu principal
+
+def notification_menu(facade):
+    """
+    Menu para gerenciar notificações e interesses em propriedades
+    """
+    while True:
+        print("\n===== Sistema de Notificações =====")
+        print("1. Registrar interesse em propriedades")
+        print("2. Ver notificações")
+        print("3. Desativar notificações")
+        print("4. Voltar ao menu principal")
+        option = input("Escolha uma opção: ")
+
+        if option == "1":
+            print("\n===== Registrar Interesse em Propriedades =====")
+            # Coleta os critérios de interesse
+            criteria = {}
+            
+            # Localização (opcional)
+            location = input("Digite a localização de interesse (deixe em branco para ignorar): ")
+            if location:
+                criteria['location'] = location
+            
+            # Faixa de preço (opcional)
+            min_price = input("Digite o preço mínimo (deixe em branco para ignorar): ")
+            if min_price:
+                criteria['min_price'] = float(min_price)
+            
+            max_price = input("Digite o preço máximo (deixe em branco para ignorar): ")
+            if max_price:
+                criteria['max_price'] = float(max_price)
+            
+            # Tipo de propriedade (opcional)
+            property_type = input("Digite o tipo de propriedade (Casa/Apartamento/Terreno) (deixe em branco para ignorar): ").capitalize()
+            if property_type and property_type in {"Casa", "Apartamento", "Terreno"}:
+                criteria['property_category'] = property_type
+            
+            # Tipo de transação (opcional)
+            transaction_type = input("Digite o tipo de transação (Venda/Aluguel) (deixe em branco para ignorar): ").capitalize()
+            if transaction_type and transaction_type in {"Venda", "Aluguel"}:
+                criteria['transaction_type'] = transaction_type
+            
+            # Registra o interesse
+            success, message = facade.register_property_interest(criteria)
+            print(message)
+
+        elif option == "2":
+            print("\n===== Suas Notificações =====")
+            success, notifications = facade.get_notifications()
+            
+            if success:
+                if notifications:
+                    for idx, notification in enumerate(notifications, 1):
+                        print(f"{idx}. {notification}")
+                else:
+                    print("Você não possui notificações.")
+            else:
+                print(notifications)  # Mensagem de erro
+
+        elif option == "3":
+            print("\n===== Desativar Notificações =====")
+            success, message = facade.unregister_property_interest()
+            print(message)
+
+        elif option == "4":
+            break  # Volta ao menu principal
+
+        else:
+            print("Opção inválida. Tente novamente.")
+
+# Modificação do menu principal para incluir o sistema de notificações
+
+#main.py
 def menu():
-    user_controller = UserController()
-    property_controller = PropertyController()
-    mortgage_controller = MortgageController()
-    visit_controller = VisitController(property_controller, user_controller)
-    market_analysis_controller = MarketAnalysisController(property_controller)
-    review_controller = ReviewController()
-    logged_user = None
+    # Criação do objeto Facade que encapsula todos os controladores, agora com Observer
+    facade = RealEstateFacadeWithObserver()
 
     while True:
         try:
@@ -980,7 +1410,8 @@ def menu():
             print("7 - Avaliar Propriedade")
             print("8 - Exibir Avaliações")
             print("9 - Análise de Mercado")
-            print("10 - Logout")
+            print("10 - Sistema de Notificações")
+            print("11 - Logout")
             print("0 - Sair")
 
             option = input("Escolha uma opção: ")
@@ -990,15 +1421,15 @@ def menu():
                 email = input("Digite o email do usuário: ")
                 password = input("Digite a senha: ")
                 user_type = input("Digite o tipo de usuário (Cliente ou Agente): ")
-                user_controller.register_user(name, email, password, user_type)
+                facade.register_user(name, email, password, user_type)
 
             elif option == "2":
-                logged_user = user_controller.login()
+                logged_user = facade.login()
 
             elif option == "3":
-                if logged_user is None:
+                if not facade.get_logged_user():
                     print("Erro: Nenhum usuário logado.")
-                elif logged_user.get_role() != "Agente":
+                elif facade.get_logged_user().get_role() != "Agente":
                     print("Erro: Apenas agentes podem cadastrar uma propriedade.")
                 else:
                     title = input("Digite o título da propriedade: ")
@@ -1013,36 +1444,42 @@ def menu():
                     while transaction_type not in {"Venda", "Aluguel"}:
                         print("Erro: Transação inválida. Use: Venda ou Aluguel.")
                         transaction_type = input("Digite o tipo de transação (Venda/Aluguel): ")
-                    # Usa o Factory Method para criar a propriedade
-                    new_property = property_controller.create_property(
-                        property_type = property_category,
-                        title = title,
-                        description = description,
-                        price = price,
-                        location = location,
-                        transaction_type = transaction_type,
-                        agent = logged_user
+                    
+                    # Usa o Facade para criar a propriedade
+                    success, result = facade.create_property(
+                        property_type=property_category,
+                        title=title,
+                        description=description,
+                        price=price,
+                        location=location,
+                        transaction_type=transaction_type
                     )
-                    print(f"Propriedade '{new_property.title}' cadastrada com sucesso!")
+                    
+                    if success:
+                        print(f"Propriedade '{result.title}' cadastrada com sucesso!")
+                    else:
+                        print(f"Erro ao cadastrar propriedade: {result}")
 
             elif option == "4":
                 print("\n===== Buscar Propriedades =====")
                 search_by = input("Buscar por: 0 - Todas | 1 - Localização | 2 - Tipo | 3 - Faixa de preço: ")
+                
                 if search_by == "0":
-                    results = property_controller.search_all_properties()
+                    results = facade.search_properties("all")
                 elif search_by == "1":
                     location = input("Digite a localização: ")
-                    results = property_controller.search_property_by_location(location)
+                    results = facade.search_properties("location", location)
                 elif search_by == "2":
                     property_category = input("Digite o tipo do imóvel (Casa/Apartamento/Terreno): ")
-                    results = property_controller.search_property_by_type(property_category)
+                    results = facade.search_properties("type", property_category)
                 elif search_by == "3":
                     min_price = float(input("Digite o preço mínimo: "))
                     max_price = float(input("Digite o preço máximo: "))
-                    results = property_controller.search_property_by_price_range(min_price, max_price)
+                    results = facade.search_properties("price_range", min_price=min_price, max_price=max_price)
                 else:
                     print("Opção inválida.")
-                    return
+                    continue
+                    
                 if results:
                     print("\nResultados da busca:")
                     for prop in results:
@@ -1056,37 +1493,32 @@ def menu():
                 interest_rate = float(input("Digite a taxa de juros anual (em %): "))
                 years = int(input("Digite o período de pagamento (em anos): "))
 
-                mortgage = mortgage_controller.calculate_mortgage(price, interest_rate, years)
-
+                mortgage = facade.calculate_mortgage(price, interest_rate, years)
                 print(f"\nValor da parcela mensal: R$ {mortgage.monthly_payment:.2f}")
                 print(f"Valor total do financiamento: R$ {mortgage.total_payment:.2f}")
 
             elif option == "6":
-                agendamento_menu(logged_user, visit_controller)  # Chama o menu de agendamento
+                agendamento_menu(facade)  # Chama o menu de agendamento passando o facade
 
             elif option == "7":
                 print("\n===== Avaliar Propriedade =====")
-                if logged_user is None:
+                if not facade.get_logged_user():
                     print("Erro: Nenhum usuário logado.")
                 else:
                     property_id = int(input("Digite o ID da propriedade para avaliar: "))
                     rating = float(input("Digite a nota de avaliação (1-5): "))
                     comment = input("Digite um comentário (opcional): ")
-                    # Adicionar avaliação usando o ReviewController
-                    new_review = review_controller.add_review(
-                        reviewer_id=logged_user.id,
-                        property_id=property_id,
-                        rating=rating,
-                        comment=comment
-                    )
-                    if new_review:
+                    
+                    # Adicionar avaliação usando o facade
+                    success, result = facade.add_review(property_id, rating, comment)
+                    if success:
                         print("Avaliação adicionada com sucesso!")
                     else:
-                        print("Erro ao adicionar a avaliação.")
+                        print(f"Erro ao adicionar a avaliação: {result}")
 
             elif option == "8":
                 print("===== Exibir Avaliações =====")
-                reviews = review_controller.list_all_reviews()
+                reviews = facade.list_reviews()
                 if reviews:
                     print("Todas as avaliações cadastradas:")
                     for review in reviews:
@@ -1102,7 +1534,7 @@ def menu():
             elif option == "9":
                 print("\n===== Análise de Mercado =====")
                 location = input("Digite a localização para análise de mercado: ")
-                analysis = market_analysis_controller.get_market_analysis(location)
+                analysis = facade.get_market_analysis(location)
 
                 if analysis:
                     print(f"\nPreço Médio: R$ {analysis['avg_price']:.2f}")
@@ -1112,18 +1544,22 @@ def menu():
                     print("Nenhuma análise disponível para esta localização.")
 
             elif option == "10":
-                if logged_user:
-                    print(f"Logout realizado. Até mais, {logged_user.name}!")
-                    logged_user = None
+                # Verifica se há um usuário logado
+                if not facade.get_logged_user():
+                    print("Erro: Nenhum usuário logado.")
+                else:
+                    notification_menu(facade)  # Chama o menu de notificações
+
+            elif option == "11":  # Opção de logout agora é 11
+                user_name = facade.logout()
+                if user_name:
+                    print(f"Logout realizado. Até mais, {user_name}!")
                 else:
                     print("Nenhum usuário logado.")
-
+            
             elif option == "0":
                 print("Saindo do sistema...")
                 break
-
-            else:
-                print("Opção inválida. Tente novamente.")
 
         except Exception as e:
             print(f"\nErro inesperado: {e}")
